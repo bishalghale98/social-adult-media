@@ -69,6 +69,11 @@ model User {
   sentRequests FriendRequest[] @relation("SentRequests")
   recvRequests FriendRequest[] @relation("RecvRequests")
 
+  friendshipsAsUser1   Friendship[]   @relation("FriendUser1")
+  friendshipsAsUser2   Friendship[]   @relation("FriendUser2")
+  conversationsAsUser1 Conversation[] @relation("ConvUser1")
+  conversationsAsUser2 Conversation[] @relation("ConvUser2")
+
   messages    Message[]
   reportsMade Report[]  @relation("ReportsMade")
 
@@ -116,6 +121,9 @@ model Friendship {
   user2Id   String
   createdAt DateTime @default(now())
 
+  user1 User @relation("FriendUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2 User @relation("FriendUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+
   @@unique([user1Id, user2Id])
 }
 
@@ -126,6 +134,8 @@ model Conversation {
   lastMessageAt DateTime?
   createdAt     DateTime  @default(now())
 
+  user1    User      @relation("ConvUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2    User      @relation("ConvUser2", fields: [user2Id], references: [id], onDelete: Cascade)
   messages Message[]
 
   @@unique([user1Id, user2Id])
@@ -137,9 +147,13 @@ model Message {
   senderId       String
   type           MessageType @default(TEXT)
 
-  bodyText String?
-  mediaUrl String?
+  // Encrypted fields (AES-256-GCM)
+  bodyCiphertext String? // base64 ciphertext
+  nonce          String? // base64 IV
+  authTag        String? // base64 GCM auth tag
+  keyVersion     Int     @default(1)
 
+  mediaUrl  String?
   isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
 
@@ -165,6 +179,11 @@ model Report {
   targetId   String
   reason     String
   status     ReportStatus     @default(OPEN)
+
+  // For message-level reporting & moderation context
+  messageId          String?
+  conversationId     String?
+  evidenceMessageIds String[] @default([])
 
   reporter User @relation("ReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
 

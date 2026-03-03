@@ -11,4 +11,12 @@ export const env = {
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
   CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:3000',
+
+  // Encryption
+  MESSAGE_ENCRYPTION_KEY_V1: process.env.MESSAGE_ENCRYPTION_KEY_V1!,
+  MESSAGE_ENCRYPTION_KEY_VERSION: parseInt(process.env.MESSAGE_ENCRYPTION_KEY_VERSION || '1', 10),
+
+  // Message retention (days)
+  MESSAGE_RETENTION_DAYS: parseInt(process.env.MESSAGE_RETENTION_DAYS || '90', 10),
+  REPORTED_MESSAGE_RETENTION_DAYS: parseInt(process.env.REPORTED_MESSAGE_RETENTION_DAYS || '180', 10),
 };

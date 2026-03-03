@@ -14,12 +14,56 @@ export class AdminController {
         }
     }
 
+    static async getReportDetail(req: AuthRequest, res: Response): Promise<void> {
+        try {
+            const result = await AdminService.getReportDetail(
+                req.params.id as string,
+                req.userId!
+            );
+            res.status(200).json(result);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : '';
+            if (message === 'Report not found') {
+                res.status(404).json({ error: message });
+                return;
+            }
+            if (message === 'Report is closed') {
+                res.status(403).json({ error: message });
+                return;
+            }
+            res.status(500).json({ error: 'Failed to get report detail' });
+        }
+    }
+
     static async reviewReport(req: AuthRequest, res: Response): Promise<void> {
         try {
             const result = await AdminService.reviewReport(req.params.id as string, req.userId!);
             res.status(200).json(result);
         } catch {
             res.status(500).json({ error: 'Failed to review report' });
+        }
+    }
+
+    static async closeReport(req: AuthRequest, res: Response): Promise<void> {
+        try {
+            const result = await AdminService.closeReport(req.params.id as string, req.userId!);
+            res.status(200).json(result);
+        } catch {
+            res.status(500).json({ error: 'Failed to close report' });
+        }
+    }
+
+    static async warnUser(req: AuthRequest, res: Response): Promise<void> {
+        try {
+            const { reportId } = req.body;
+            const result = await AdminService.warnUser(
+                req.params.id as string,
+                req.userId!,
+                reportId
+            );
+            res.status(200).json(result);
+        } catch {
+            res.status(500).json({ error: 'Failed to warn user' });
         }
     }
 

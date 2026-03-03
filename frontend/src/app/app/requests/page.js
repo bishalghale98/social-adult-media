@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import api from '../../../lib/api';
 
 export default function RequestsPage() {
@@ -7,6 +8,7 @@ export default function RequestsPage() {
     const [outgoing, setOutgoing] = useState([]);
     const [tab, setTab] = useState('incoming');
     const [loading, setLoading] = useState(true);
+    const router = useRouter();
 
     useEffect(() => {
         fetchRequests();
@@ -30,8 +32,12 @@ export default function RequestsPage() {
 
     async function acceptRequest(id) {
         try {
-            await api.post(`/friends/requests/${id}/accept`);
+            const { data } = await api.post(`/friends/requests/${id}/accept`);
             setIncoming((prev) => prev.filter((r) => r.id !== id));
+            // Navigate to the new conversation
+            if (data.conversation?.id) {
+                router.push(`/app/chat/${data.conversation.id}`);
+            }
         } catch (err) {
             alert(err.response?.data?.error || 'Failed');
         }

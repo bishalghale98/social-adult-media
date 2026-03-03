@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import prisma from '../config/prisma';
 import { sanitize } from '../utils/sanitize';
+import { encryptMessage } from '../utils/encryption';
 
 interface AuthenticatedSocket extends Socket {
     userId?: string;
@@ -98,12 +99,18 @@ export function initSocketIO(httpServer: HttpServer) {
 
                     const sanitizedText = sanitize(data.bodyText);
 
+                    // Encrypt before storing
+                    const encrypted = encryptMessage(sanitizedText);
+
                     const message = await prisma.message.create({
                         data: {
                             conversationId: data.conversationId,
                             senderId: userId,
                             type: 'TEXT',
-                            bodyText: sanitizedText,
+                            bodyCiphertext: encrypted.ciphertext,
+                            nonce: encrypted.nonce,
+                            authTag: encrypted.authTag,
+                            keyVersion: encrypted.keyVersion,
                         },
                     });
 
@@ -112,12 +119,13 @@ export function initSocketIO(httpServer: HttpServer) {
                         data: { lastMessageAt: new Date() },
                     });
 
+                    // Emit decrypted plaintext to connected users (never ciphertext)
                     const messagePayload = {
                         id: message.id,
                         conversationId: message.conversationId,
                         senderId: message.senderId,
                         type: message.type,
-                        bodyText: message.bodyText,
+                        bodyText: sanitizedText,
                         createdAt: message.createdAt,
                     };
 

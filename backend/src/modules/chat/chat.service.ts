@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma';
 import { sanitize } from '../../utils/sanitize';
+import { encryptMessage, decryptMessage } from '../../utils/encryption';
 
 interface ConversationRow {
     id: string;
@@ -9,10 +10,30 @@ interface ConversationRow {
     createdAt: Date;
 }
 
-interface MessageRow {
-    bodyText: string | null;
+interface EncryptedMessageRow {
+    bodyCiphertext: string | null;
+    nonce: string | null;
+    authTag: string | null;
+    keyVersion: number;
     createdAt: Date;
     senderId: string;
+}
+
+/**
+ * Safely decrypt a message row, returning null if fields are missing.
+ */
+function decryptRow(row: EncryptedMessageRow): string | null {
+    if (!row.bodyCiphertext || !row.nonce || !row.authTag) return null;
+    try {
+        return decryptMessage({
+            ciphertext: row.bodyCiphertext,
+            nonce: row.nonce,
+            authTag: row.authTag,
+            keyVersion: row.keyVersion,
+        });
+    } catch {
+        return '[decryption error]';
+    }
 }
 
 export class ChatService {
@@ -34,13 +55,20 @@ export class ChatService {
             select: { userId: true, username: true, lastActiveAt: true },
         });
 
-        // Get last message for each conversation
-        const lastMessages: (MessageRow | null)[] = await Promise.all(
+        // Get last message for each conversation (encrypted)
+        const lastMessages: (EncryptedMessageRow | null)[] = await Promise.all(
             conversations.map((c: ConversationRow) =>
                 prisma.message.findFirst({
                     where: { conversationId: c.id, isDeleted: false },
                     orderBy: { createdAt: 'desc' },
-                    select: { bodyText: true, createdAt: true, senderId: true },
+                    select: {
+                        bodyCiphertext: true,
+                        nonce: true,
+                        authTag: true,
+                        keyVersion: true,
+                        createdAt: true,
+                        senderId: true,
+                    },
                 })
             )
         );
@@ -48,10 +76,17 @@ export class ChatService {
         return conversations.map((c: ConversationRow, i: number) => {
             const otherUserId = c.user1Id === userId ? c.user2Id : c.user1Id;
             const profile = profiles.find((p: { userId: string }) => p.userId === otherUserId);
+            const encMsg = lastMessages[i];
             return {
                 id: c.id,
                 otherUser: profile,
-                lastMessage: lastMessages[i],
+                lastMessage: encMsg
+                    ? {
+                        bodyText: decryptRow(encMsg),
+                        createdAt: encMsg.createdAt,
+                        senderId: encMsg.senderId,
+                    }
+                    : null,
                 lastMessageAt: c.lastMessageAt,
             };
         });
@@ -74,6 +109,24 @@ export class ChatService {
             throw new Error('Conversation not found');
         }
 
+        // Check if blocked
+        const otherUserId =
+            conversation.user1Id === userId
+                ? conversation.user2Id
+                : conversation.user1Id;
+
+        const blocked = await prisma.block.findFirst({
+            where: {
+                OR: [
+                    { blockerId: userId, blockedId: otherUserId },
+                    { blockerId: otherUserId, blockedId: userId },
+                ],
+            },
+        });
+        if (blocked) {
+            throw new Error('Cannot access this conversation');
+        }
+
         const where: Record<string, unknown> = {
             conversationId,
             isDeleted: false,
@@ -90,13 +143,25 @@ export class ChatService {
                 id: true,
                 senderId: true,
                 type: true,
-                bodyText: true,
+                bodyCiphertext: true,
+                nonce: true,
+                authTag: true,
+                keyVersion: true,
                 createdAt: true,
             },
         });
 
+        // Decrypt for the requesting participant
+        const decryptedMessages = messages.map((m) => ({
+            id: m.id,
+            senderId: m.senderId,
+            type: m.type,
+            bodyText: decryptRow(m as EncryptedMessageRow),
+            createdAt: m.createdAt,
+        }));
+
         return {
-            messages: messages.reverse(),
+            messages: decryptedMessages.reverse(),
             nextCursor:
                 messages.length > 0 ? messages[0].createdAt.toISOString() : null,
         };
@@ -138,12 +203,18 @@ export class ChatService {
 
         const sanitizedText = sanitize(bodyText);
 
+        // Encrypt before storing
+        const encrypted = encryptMessage(sanitizedText);
+
         const message = await prisma.message.create({
             data: {
                 conversationId,
                 senderId,
                 type: 'TEXT',
-                bodyText: sanitizedText,
+                bodyCiphertext: encrypted.ciphertext,
+                nonce: encrypted.nonce,
+                authTag: encrypted.authTag,
+                keyVersion: encrypted.keyVersion,
             },
         });
 
@@ -154,7 +225,12 @@ export class ChatService {
         });
 
         return {
-            ...message,
+            id: message.id,
+            conversationId: message.conversationId,
+            senderId: message.senderId,
+            type: message.type,
+            bodyText: sanitizedText, // Return plaintext to sender (never stored)
+            createdAt: message.createdAt,
             otherUserId,
         };
     }
