@@ -2,6 +2,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../../context/AuthContext';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Lock, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
     const { login } = useAuth();
@@ -27,51 +32,82 @@ export default function LoginPage() {
     }
 
     return (
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
-            <div className="glass animate-in" style={{ width: '100%', maxWidth: 440, padding: '2.5rem', borderRadius: '1.5rem' }}>
-                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                    <div style={{
-                        width: 56, height: 56, borderRadius: '1rem',
-                        background: 'linear-gradient(135deg, var(--color-primary), var(--color-accent))',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        margin: '0 auto 1.25rem', fontSize: '1.5rem',
-                    }}>🔒</div>
-                    <h1 style={{ fontSize: '1.8rem', fontWeight: 700 }}>
-                        <span className="gradient-text">Welcome Back</span>
-                    </h1>
-                    <p style={{ color: 'var(--color-muted)', marginTop: '0.5rem', fontSize: '0.9rem' }}>
-                        Sign in to your account
+        <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden bg-black text-zinc-50">
+            {/* Background glowing orbs */}
+            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] pointer-events-none"></div>
+            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-600/20 rounded-full blur-[120px] pointer-events-none"></div>
+
+            <Card className="w-full max-w-md relative z-10 bg-zinc-950/80 backdrop-blur-xl border-white/10 shadow-2xl animate-in">
+                <CardHeader className="text-center pb-6">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mx-auto mb-6 text-white shadow-[0_0_30px_rgba(168,85,247,0.4)]">
+                        <Lock className="w-8 h-8" />
+                    </div>
+                    <CardTitle className="text-3xl font-bold tracking-tight mb-2">
+                        <span className="bg-linear-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">Welcome Back</span>
+                    </CardTitle>
+                    <CardDescription className="text-base text-zinc-400">
+                        Sign in to your account to continue
+                    </CardDescription>
+                </CardHeader>
+
+                <CardContent>
+                    {error && (
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-3 rounded-lg flex items-center gap-2 text-sm mb-6">
+                            <AlertCircle className="w-4 h-4" />
+                            <span>{error}</span>
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+                        <div className="space-y-2">
+                            <Label htmlFor="email" className="text-zinc-300">Email Address</Label>
+                            <Input
+                                id="email"
+                                name="email"
+                                type="email"
+                                placeholder="your@email.com"
+                                className="bg-zinc-900/50 border-white/10 focus-visible:ring-purple-500 text-white placeholder:text-zinc-500"
+                                value={form.email}
+                                onChange={handleChange}
+                                required
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="password" className="text-zinc-300">Password</Label>
+                            </div>
+                            <Input
+                                id="password"
+                                name="password"
+                                type="password"
+                                placeholder="••••••••"
+                                className="bg-zinc-900/50 border-white/10 focus-visible:ring-purple-500 text-white placeholder:text-zinc-500"
+                                value={form.password}
+                                onChange={handleChange}
+                                required
+                            />
+                        </div>
+
+                        <Button
+                            type="submit"
+                            className="w-full py-6 mt-4 text-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white border-0 shadow-lg shadow-purple-500/25"
+                            disabled={loading}
+                        >
+                            {loading ? <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span> : 'Sign In'}
+                        </Button>
+                    </form>
+                </CardContent>
+
+                <CardFooter className="flex justify-center border-t border-white/5 pt-6 mt-2">
+                    <p className="text-center text-zinc-400 text-sm">
+                        Don&apos;t have an account?{' '}
+                        <Link href="/auth/register" className="text-purple-400 font-semibold hover:text-purple-300 transition-colors">
+                            Create Account
+                        </Link>
                     </p>
-                </div>
-
-                {error && <div className="error-msg">{error}</div>}
-
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                    <div>
-                        <label className="label">Email</label>
-                        <input name="email" type="email" className="input-field" placeholder="your@email.com"
-                            value={form.email} onChange={handleChange} required />
-                    </div>
-
-                    <div>
-                        <label className="label">Password</label>
-                        <input name="password" type="password" className="input-field" placeholder="Enter your password"
-                            value={form.password} onChange={handleChange} required />
-                    </div>
-
-                    <button type="submit" className="btn-primary" disabled={loading}
-                        style={{ width: '100%', marginTop: '0.25rem', padding: '0.9rem' }}>
-                        {loading ? <span className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></span> : 'Sign In'}
-                    </button>
-                </form>
-
-                <p style={{ textAlign: 'center', marginTop: '1.5rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>
-                    Don&apos;t have an account?{' '}
-                    <Link href="/auth/register" style={{ color: 'var(--color-primary-light)', textDecoration: 'none', fontWeight: 600 }}>
-                        Create Account
-                    </Link>
-                </p>
-            </div>
+                </CardFooter>
+            </Card>
         </div>
     );
 }

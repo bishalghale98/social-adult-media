@@ -3,6 +3,13 @@ import { useState, useEffect, useRef, use } from 'react';
 import { useAuth } from '../../../../context/AuthContext';
 import { getSocket, disconnectSocket } from '../../../../lib/socket';
 import api from '../../../../lib/api';
+import { Card, CardContent } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Send, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 export default function ChatPage({ params }) {
     const resolvedParams = use(params);
@@ -99,84 +106,103 @@ export default function ChatPage({ params }) {
 
     if (loading) {
         return (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>
-                <div className="spinner"></div>
+            <div className="max-w-5xl mx-auto space-y-4 animate-in">
+                <Card className="bg-zinc-950/80 border-white/[0.06]">
+                    <CardContent className="p-4 flex items-center gap-4">
+                        <Skeleton className="h-10 w-10 rounded-full bg-zinc-800" />
+                        <Skeleton className="h-5 w-32 bg-zinc-800" />
+                    </CardContent>
+                </Card>
+                <Card className="bg-zinc-950/80 border-white/[0.06] h-[60vh]">
+                    <CardContent className="p-6 space-y-4">
+                        {[1, 2, 3].map((i) => (
+                            <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
+                                <Skeleton className={`h-10 ${i % 2 === 0 ? 'w-48' : 'w-56'} bg-zinc-800 rounded-2xl`} />
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
             </div>
         );
     }
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
+        <div className="flex flex-col h-[calc(100vh-100px)] lg:h-[calc(100vh-40px)] animate-in max-w-5xl mx-auto w-full">
             {/* Chat header */}
-            <div style={{
-                display: 'flex', alignItems: 'center', gap: '1rem',
-                padding: '1rem', background: 'var(--color-surface)',
-                borderRadius: '1rem', marginBottom: '1rem',
-            }}>
-                <div className="avatar">{otherUser?.username?.[0]?.toUpperCase() || '?'}</div>
-                <div>
-                    <h2 style={{ fontWeight: 600, fontSize: '1.1rem' }}>{otherUser?.username || 'Chat'}</h2>
-                    {isTyping && (
-                        <p style={{ fontSize: '0.8rem', color: 'var(--color-primary-light)', fontStyle: 'italic' }}>
-                            typing...
-                        </p>
-                    )}
-                </div>
-            </div>
+            <Card className="bg-zinc-950/80 border-white/[0.06] mb-3 shrink-0 shadow-sm">
+                <CardContent className="p-4 flex items-center gap-3">
+                    <Link href="/app/chats" className="md:hidden">
+                        <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-white h-8 w-8">
+                            <ArrowLeft className="w-4 h-4" />
+                        </Button>
+                    </Link>
+                    <Avatar className="h-10 w-10 border border-white/10">
+                        <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white text-sm font-bold">
+                            {otherUser?.username?.[0]?.toUpperCase() || '?'}
+                        </AvatarFallback>
+                    </Avatar>
+                    <div>
+                        <h2 className="font-bold text-[0.95rem] text-zinc-100 leading-tight">{otherUser?.username || 'Chat'}</h2>
+                        {isTyping && (
+                            <p className="text-xs text-purple-400 italic animate-pulse">
+                                typing...
+                            </p>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* Messages */}
-            <div style={{
-                flex: 1, overflowY: 'auto', padding: '1rem',
-                display: 'flex', flexDirection: 'column', gap: '0.5rem',
-            }}>
-                {messages.map((msg) => {
-                    const isMine = msg.senderId === user?.id;
-                    return (
-                        <div key={msg.id} style={{
-                            alignSelf: isMine ? 'flex-end' : 'flex-start',
-                            maxWidth: '75%',
-                        }}>
-                            <div style={{
-                                padding: '0.75rem 1rem',
-                                borderRadius: isMine ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
-                                background: isMine
-                                    ? 'linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))'
-                                    : 'var(--color-surface-light)',
-                                color: isMine ? 'white' : 'var(--color-foreground)',
-                                fontSize: '0.9rem',
-                                lineHeight: 1.5,
-                            }}>
-                                {msg.bodyText}
-                            </div>
-                            <p style={{
-                                fontSize: '0.7rem', color: 'var(--color-muted)',
-                                marginTop: '0.2rem',
-                                textAlign: isMine ? 'right' : 'left',
-                            }}>
-                                {formatTime(msg.createdAt)}
-                            </p>
+            <Card className="flex-1 overflow-hidden border-white/[0.06] bg-zinc-950/60 mb-3">
+                <CardContent className="p-4 h-full overflow-y-auto flex flex-col gap-2.5">
+                    {messages.length === 0 ? (
+                        <div className="m-auto text-center text-zinc-500">
+                            <div className="text-4xl mb-3">👋</div>
+                            <p className="text-sm">Say hi to {otherUser?.username || 'your friend'}!</p>
                         </div>
-                    );
-                })}
-                <div ref={messagesEndRef} />
-            </div>
+                    ) : (
+                        messages.map((msg) => {
+                            const isMine = msg.senderId === user?.id;
+                            return (
+                                <div key={msg.id} className={`flex flex-col max-w-[80%] md:max-w-[70%] ${isMine ? 'self-end items-end' : 'self-start items-start'}`}>
+                                    <div className={`px-4 py-2.5 text-[0.925rem] leading-relaxed shadow-sm ${isMine
+                                        ? 'bg-gradient-to-br from-purple-600 to-purple-800 text-white rounded-2xl rounded-tr-sm'
+                                        : 'bg-zinc-800/80 text-zinc-100 rounded-2xl rounded-tl-sm border border-white/[0.04]'
+                                        }`}>
+                                        {msg.bodyText}
+                                    </div>
+                                    <p className="text-[0.65rem] text-zinc-600 mt-1 px-1">
+                                        {formatTime(msg.createdAt)}
+                                    </p>
+                                </div>
+                            );
+                        })
+                    )}
+                    <div ref={messagesEndRef} />
+                </CardContent>
+            </Card>
 
             {/* Input */}
-            <form onSubmit={sendMessage} style={{
-                display: 'flex', gap: '0.75rem', padding: '1rem',
-                background: 'var(--color-surface)', borderRadius: '1rem',
-            }}>
-                <input
-                    className="input-field"
-                    placeholder="Type a message..."
-                    value={input}
-                    onChange={(e) => { setInput(e.target.value); handleTyping(); }}
-                    style={{ flex: 1 }}
-                />
-                <button type="submit" className="btn-primary" style={{ padding: '0.75rem 1.5rem' }}>
-                    Send
-                </button>
-            </form>
+            <Card className="bg-zinc-950/80 border-white/[0.06] shrink-0 shadow-md">
+                <CardContent className="p-3">
+                    <form onSubmit={sendMessage} className="flex gap-2 items-center">
+                        <Input
+                            className="flex-1 bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50"
+                            placeholder="Type a message..."
+                            value={input}
+                            onChange={(e) => { setInput(e.target.value); handleTyping(); }}
+                        />
+                        <Button
+                            type="submit"
+                            size="icon"
+                            disabled={!input.trim()}
+                            className="bg-purple-600 hover:bg-purple-500 text-white h-10 w-10 shrink-0 shadow-sm shadow-purple-500/20 disabled:opacity-30"
+                        >
+                            <Send className="w-4 h-4" />
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
         </div>
     );
 }

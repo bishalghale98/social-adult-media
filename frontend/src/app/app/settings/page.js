@@ -1,6 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
 import api from '../../../lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { AlertTriangle, Shield, UserX } from 'lucide-react';
 
 export default function SettingsPage() {
     const [blocks, setBlocks] = useState([]);
@@ -31,45 +36,74 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="animate-in" style={{ maxWidth: 600 }}>
-            <h1 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '1.5rem' }}>
-                <span className="gradient-text">Settings</span>
-            </h1>
+        <div className="animate-in max-w-2xl mx-auto space-y-6">
+            <div>
+                <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-1">
+                    <span className="bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">Settings</span>
+                </h1>
+                <p className="text-zinc-400">Privacy & account preferences</p>
+            </div>
 
             {/* Legal disclaimer */}
-            <div className="card" style={{ marginBottom: '1.5rem', borderColor: 'rgba(245,158,11,0.3)' }}>
-                <h3 style={{ fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-warning)' }}>⚠️ Platform Disclaimer</h3>
-                <p style={{ fontSize: '0.85rem', color: 'var(--color-muted)', lineHeight: 1.6 }}>
-                    This platform only provides communication tools. Users are solely responsible for their interactions, decisions, and offline activities.
-                </p>
-            </div>
+            <Card className="border-amber-500/20 bg-amber-500/[0.03] shadow-sm">
+                <CardContent className="p-5 flex gap-4">
+                    <div className="shrink-0 mt-0.5">
+                        <div className="w-9 h-9 rounded-lg bg-amber-500/15 flex items-center justify-center">
+                            <AlertTriangle className="w-4.5 h-4.5 text-amber-400" />
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="font-semibold text-amber-400 text-sm mb-1.5">Platform Disclaimer</h3>
+                        <p className="text-sm text-zinc-400 leading-relaxed">
+                            This platform only provides communication tools. Users are solely responsible for their interactions, decisions, and offline activities.
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* Blocked users */}
-            <div className="card">
-                <h3 style={{ fontWeight: 600, marginBottom: '1rem' }}>Blocked Users</h3>
-                {loading ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', padding: '1.5rem' }}>
-                        <div className="spinner"></div>
-                    </div>
-                ) : blocks.length === 0 ? (
-                    <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>You haven&apos;t blocked anyone.</p>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        {blocks.map((block) => (
-                            <div key={block.id} style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                padding: '0.75rem 1rem', background: 'var(--color-surface-light)', borderRadius: '0.5rem',
-                            }}>
-                                <span style={{ fontWeight: 500 }}>{block.blockedUser?.username || 'Unknown'}</span>
-                                <button className="btn-secondary" onClick={() => unblock(block.blockedId)}
-                                    style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem' }}>
-                                    Unblock
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+            <Card className="bg-zinc-950/80 border-white/[0.06] shadow-lg">
+                <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center gap-2 text-zinc-100 text-lg">
+                        <Shield className="w-5 h-5 text-zinc-400" />
+                        Blocked Users
+                    </CardTitle>
+                </CardHeader>
+                <Separator className="bg-white/[0.04]" />
+                <CardContent className="pt-5">
+                    {loading ? (
+                        <div className="space-y-3">
+                            {[1, 2].map((i) => (
+                                <div key={i} className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-900/50 border border-white/[0.04]">
+                                    <Skeleton className="h-4 w-28 bg-zinc-800" />
+                                    <Skeleton className="h-7 w-20 bg-zinc-800 rounded-md" />
+                                </div>
+                            ))}
+                        </div>
+                    ) : blocks.length === 0 ? (
+                        <div className="text-center py-8">
+                            <UserX className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+                            <p className="text-sm text-zinc-500">You haven&apos;t blocked anyone.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {blocks.map((block) => (
+                                <div key={block.id} className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-900/50 border border-white/[0.04] hover:border-white/[0.08] transition-colors">
+                                    <span className="font-medium text-sm text-zinc-200">{block.blockedUser?.username || 'Unknown'}</span>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => unblock(block.blockedId)}
+                                        className="border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 h-7 text-xs"
+                                    >
+                                        Unblock
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
         </div>
     );
 }
