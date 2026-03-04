@@ -98,7 +98,7 @@ export default function Navigation() {
             </aside>
 
             {/* Mobile Top Header */}
-            <header className="md:hidden sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-xl border-b border-white/[0.06] px-4 py-3 flex items-center justify-between">
+            <header className="hidden sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-xl border-b border-white/[0.06] px-4 py-3 items-center justify-between">
                 <Link href="/app/discover" className="text-xl font-black tracking-tight bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
                     PrivateConnect
                 </Link>
