@@ -29,17 +29,28 @@ export class FriendsService {
             throw new Error('Already friends');
         }
 
-        // Check for existing pending request
+        // Check for existing request between these users (any status)
         const existingRequest = await prisma.friendRequest.findFirst({
             where: {
                 OR: [
-                    { senderId, receiverId, status: 'PENDING' },
-                    { senderId: receiverId, receiverId: senderId, status: 'PENDING' },
+                    { senderId, receiverId },
+                    { senderId: receiverId, receiverId: senderId },
                 ],
             },
         });
+
         if (existingRequest) {
-            throw new Error('A pending request already exists');
+            if (existingRequest.status === 'PENDING') {
+                throw new Error('A pending request already exists');
+            }
+            // If previously rejected/canceled, reuse the record
+            if (existingRequest.status === 'REJECTED' || existingRequest.status === 'CANCELED') {
+                const updated = await prisma.friendRequest.update({
+                    where: { id: existingRequest.id },
+                    data: { senderId, receiverId, status: 'PENDING' },
+                });
+                return updated;
+            }
         }
 
         const request = await prisma.friendRequest.create({

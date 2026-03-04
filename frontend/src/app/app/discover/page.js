@@ -1,6 +1,18 @@
 'use client';
-import { useState, useEffect } from 'react';
-import api from '../../../lib/api';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+} from '@/components/ui/form';
+import { useGetUsersQuery } from '../../../store/slice/userApi';
+import { useSendFriendRequestMutation } from '../../../store/slice/friendApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -17,58 +29,64 @@ import {
 } from '@/components/ui/select';
 import { MapPin, UserPlus, Filter, Users } from 'lucide-react';
 
+const filterSchema = z.object({
+    gender: z.string().optional(),
+    interestedIn: z.string().optional(),
+    city: z.string().optional(),
+    minAge: z.string().optional(),
+    maxAge: z.string().optional(),
+});
+
 export default function DiscoverPage() {
-    const [users, setUsers] = useState([]);
-    const [pagination, setPagination] = useState({});
-    const [filters, setFilters] = useState({ gender: '', interestedIn: '', city: '', minAge: '', maxAge: '' });
+    const form = useForm({
+        resolver: zodResolver(filterSchema),
+        defaultValues: {
+            gender: 'ALL',
+            interestedIn: 'ALL',
+            city: '',
+            minAge: '',
+            maxAge: ''
+        }
+    });
+
     const [page, setPage] = useState(1);
-    const [loading, setLoading] = useState(true);
+    const [appliedFilters, setAppliedFilters] = useState({ page: 1, limit: 20 });
+
+    // Build query params from applied filters
+    const queryParams = { ...appliedFilters };
+
+    const { data, isLoading: loading } = useGetUsersQuery(queryParams);
+    const users = data?.users || [];
+    const pagination = data?.pagination || {};
+
+    const [sendFriendRequest, { isLoading: sendingRequest }] = useSendFriendRequestMutation();
     const [sendingTo, setSendingTo] = useState(null);
 
-    useEffect(() => {
-        fetchUsers();
-    }, [page]);
-
-    async function fetchUsers() {
-        setLoading(true);
-        try {
-            const params = { page, limit: 20 };
-            if (filters.gender) params.gender = filters.gender;
-            if (filters.interestedIn) params.interestedIn = filters.interestedIn;
-            if (filters.city) params.city = filters.city;
-            if (filters.minAge) params.minAge = filters.minAge;
-            if (filters.maxAge) params.maxAge = filters.maxAge;
-
-            const { data } = await api.get('/users', { params });
-            setUsers(data.users);
-            setPagination(data.pagination);
-        } catch {
-            // Ignore
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    async function sendFriendRequest(userId) {
+    async function handleSendFriendRequest(userId) {
         setSendingTo(userId);
         try {
-            await api.post('/friends/requests', { receiverId: userId });
-            setUsers((prev) => prev.filter((u) => u.userId !== userId));
+            await sendFriendRequest({ receiverId: userId, queryParams }).unwrap();
         } catch (err) {
-            alert(err.response?.data?.error || 'Failed to send request');
+            toast.error(err.data?.error || 'Failed to send request');
         } finally {
             setSendingTo(null);
         }
     }
 
-    function handleFilterChange(e) {
-        setFilters({ ...filters, [e.target.name]: e.target.value });
+    function onSubmit(values) {
+        const params = { page: 1, limit: 20 };
+        if (values.gender && values.gender !== 'ALL') params.gender = values.gender;
+        if (values.interestedIn && values.interestedIn !== 'ALL') params.interestedIn = values.interestedIn;
+        if (values.city) params.city = values.city;
+        if (values.minAge) params.minAge = values.minAge;
+        if (values.maxAge) params.maxAge = values.maxAge;
+        setPage(1);
+        setAppliedFilters(params);
     }
 
-    function applyFilters(e) {
-        e.preventDefault();
-        setPage(1);
-        fetchUsers();
+    function handlePageChange(newPage) {
+        setPage(newPage);
+        setAppliedFilters((prev) => ({ ...prev, page: newPage }));
     }
 
     return (
@@ -89,76 +107,115 @@ export default function DiscoverPage() {
                         <Filter className="w-4 h-4 text-zinc-400" />
                         <h3 className="text-sm font-semibold text-zinc-300">Filters</h3>
                     </div>
-                    <form onSubmit={applyFilters} className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
-                        <div className="space-y-2">
-                            <Label className="text-xs text-zinc-400 font-medium">Gender</Label>
-                            <Select value={filters.gender || "ALL"} onValueChange={(val) => setFilters({ ...filters, gender: val === "ALL" ? "" : val })}>
-                                <SelectTrigger className="bg-zinc-900/50 border-white/[0.06] text-white text-sm focus:ring-purple-500/50 h-10">
-                                    <SelectValue placeholder="All" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                    <SelectItem value="ALL" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">All</SelectItem>
-                                    <SelectItem value="MALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Male</SelectItem>
-                                    <SelectItem value="FEMALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Female</SelectItem>
-                                    <SelectItem value="OTHER" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Other</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-xs text-zinc-400 font-medium">Interested</Label>
-                            <Select value={filters.interestedIn || "ALL"} onValueChange={(val) => setFilters({ ...filters, interestedIn: val === "ALL" ? "" : val })}>
-                                <SelectTrigger className="bg-zinc-900/50 border-white/[0.06] text-white text-sm focus:ring-purple-500/50 h-10">
-                                    <SelectValue placeholder="All" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                    <SelectItem value="ALL" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">All</SelectItem>
-                                    <SelectItem value="MALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Male</SelectItem>
-                                    <SelectItem value="FEMALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Female</SelectItem>
-                                    <SelectItem value="ANY" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Any</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-xs text-zinc-400 font-medium">City</Label>
-                            <Input
-                                name="city"
-                                className="bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50 h-10"
-                                placeholder="City"
-                                value={filters.city}
-                                onChange={handleFilterChange}
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
+                            <FormField
+                                control={form.control}
+                                name="gender"
+                                render={({ field }) => (
+                                    <FormItem className="space-y-2">
+                                        <FormLabel className="text-xs text-zinc-400 font-medium">Gender</FormLabel>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <FormControl>
+                                                <SelectTrigger className="bg-zinc-900/50 border-white/[0.06] text-white text-sm focus:ring-purple-500/50 h-10">
+                                                    <SelectValue placeholder="All" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                <SelectItem value="ALL" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">All</SelectItem>
+                                                <SelectItem value="MALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Male</SelectItem>
+                                                <SelectItem value="FEMALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Female</SelectItem>
+                                                <SelectItem value="OTHER" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Other</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </FormItem>
+                                )}
                             />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-2">
-                                <Label className="text-xs text-zinc-400 font-medium">Min Age</Label>
-                                <Input
+
+                            <FormField
+                                control={form.control}
+                                name="interestedIn"
+                                render={({ field }) => (
+                                    <FormItem className="space-y-2">
+                                        <FormLabel className="text-xs text-zinc-400 font-medium">Interested</FormLabel>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <FormControl>
+                                                <SelectTrigger className="bg-zinc-900/50 border-white/[0.06] text-white text-sm focus:ring-purple-500/50 h-10">
+                                                    <SelectValue placeholder="All" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                <SelectItem value="ALL" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">All</SelectItem>
+                                                <SelectItem value="MALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Male</SelectItem>
+                                                <SelectItem value="FEMALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Female</SelectItem>
+                                                <SelectItem value="ANY" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Any</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="city"
+                                render={({ field }) => (
+                                    <FormItem className="space-y-2">
+                                        <FormLabel className="text-xs text-zinc-400 font-medium">City</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                className="bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50 h-10"
+                                                placeholder="City"
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <FormField
+                                    control={form.control}
                                     name="minAge"
-                                    type="number"
-                                    className="bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50 h-10"
-                                    placeholder="18"
-                                    value={filters.minAge}
-                                    onChange={handleFilterChange}
-                                    min={18}
+                                    render={({ field }) => (
+                                        <FormItem className="space-y-2">
+                                            <FormLabel className="text-xs text-zinc-400 font-medium">Min Age</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    type="number"
+                                                    className="bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50 h-10"
+                                                    placeholder="18"
+                                                    min={18}
+                                                    {...field}
+                                                />
+                                            </FormControl>
+                                        </FormItem>
+                                    )}
                                 />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-xs text-zinc-400 font-medium">Max Age</Label>
-                                <Input
+                                <FormField
+                                    control={form.control}
                                     name="maxAge"
-                                    type="number"
-                                    className="bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50 h-10"
-                                    placeholder="99"
-                                    value={filters.maxAge}
-                                    onChange={handleFilterChange}
+                                    render={({ field }) => (
+                                        <FormItem className="space-y-2">
+                                            <FormLabel className="text-xs text-zinc-400 font-medium">Max Age</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    type="number"
+                                                    className="bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50 h-10"
+                                                    placeholder="99"
+                                                    {...field}
+                                                />
+                                            </FormControl>
+                                        </FormItem>
+                                    )}
                                 />
                             </div>
-                        </div>
-                        <div>
-                            <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-500 text-white border-0 shadow-sm h-10">
-                                Apply Filters
-                            </Button>
-                        </div>
-                    </form>
+                            <div>
+                                <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-500 text-white border-0 shadow-sm h-10">
+                                    Apply Filters
+                                </Button>
+                            </div>
+                        </form>
+                    </Form>
                 </CardContent>
             </Card>
 
@@ -235,7 +292,7 @@ export default function DiscoverPage() {
 
                                         <Button
                                             className="w-full bg-zinc-100 text-zinc-900 hover:bg-white hover:text-black font-semibold shadow-sm"
-                                            onClick={() => sendFriendRequest(user.userId)}
+                                            onClick={() => handleSendFriendRequest(user.userId)}
                                             disabled={sendingTo === user.userId}
                                         >
                                             {sendingTo === user.userId ? (
@@ -256,7 +313,7 @@ export default function DiscoverPage() {
                             <Button
                                 variant="outline"
                                 className="bg-zinc-900 border-white/10 text-white hover:bg-zinc-800 hover:text-white"
-                                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                onClick={() => handlePageChange(Math.max(1, page - 1))}
                                 disabled={page === 1}
                             >
                                 Previous
@@ -267,7 +324,7 @@ export default function DiscoverPage() {
                             <Button
                                 variant="outline"
                                 className="bg-zinc-900 border-white/10 text-white hover:bg-zinc-800 hover:text-white"
-                                onClick={() => setPage((p) => p + 1)}
+                                onClick={() => handlePageChange(page + 1)}
                                 disabled={page >= pagination.totalPages}
                             >
                                 Next

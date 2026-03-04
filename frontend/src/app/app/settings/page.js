@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
-import api from '../../../lib/api';
+import { toast } from 'sonner';
+import { useGetBlocksQuery, useUnblockMutation } from '../../../store/slice/blockApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -8,30 +8,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, Shield, UserX } from 'lucide-react';
 
 export default function SettingsPage() {
-    const [blocks, setBlocks] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const { data: blocks = [], isLoading: loading } = useGetBlocksQuery();
+    const [unblock] = useUnblockMutation();
 
-    useEffect(() => {
-        fetchBlocks();
-    }, []);
-
-    async function fetchBlocks() {
+    async function handleUnblock(blockedId) {
         try {
-            const { data } = await api.get('/blocks');
-            setBlocks(data);
+            await unblock(blockedId).unwrap();
         } catch {
-            // Ignore
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    async function unblock(blockedId) {
-        try {
-            await api.delete(`/blocks/${blockedId}`);
-            setBlocks((prev) => prev.filter((b) => b.blockedId !== blockedId));
-        } catch {
-            alert('Failed to unblock');
+            toast.error('Failed to unblock');
         }
     }
 
@@ -93,7 +77,7 @@ export default function SettingsPage() {
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => unblock(block.blockedId)}
+                                        onClick={() => handleUnblock(block.blockedId)}
                                         className="border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 h-7 text-xs"
                                     >
                                         Unblock

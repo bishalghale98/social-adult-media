@@ -1,31 +1,14 @@
 'use client';
-import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import api from '../../../lib/api';
+import { useGetConversationsQuery } from '../../../store/slice/conversationApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MessageCircle } from 'lucide-react';
 
 export default function ChatsPage() {
-    const [conversations, setConversations] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const { data: conversations = [], isLoading: loading } = useGetConversationsQuery();
     const router = useRouter();
-
-    useEffect(() => {
-        fetchConversations();
-    }, []);
-
-    async function fetchConversations() {
-        try {
-            const { data } = await api.get('/conversations');
-            setConversations(data);
-        } catch {
-            // Ignore
-        } finally {
-            setLoading(false);
-        }
-    }
 
     function formatTime(dateStr) {
         if (!dateStr) return '';
@@ -84,7 +67,6 @@ export default function ChatsPage() {
                                         {conv.otherUser?.username?.[0]?.toUpperCase() || '?'}
                                     </AvatarFallback>
                                 </Avatar>
-
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center mb-1">
                                         <h3 className="font-semibold text-[0.95rem] text-zinc-100 truncate group-hover:text-white transition-colors">

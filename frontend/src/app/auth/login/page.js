@@ -2,28 +2,46 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../../context/AuthContext';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+} from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Lock, AlertCircle } from 'lucide-react';
 
+const loginSchema = z.object({
+    email: z.string().email('Invalid email address'),
+    password: z.string().min(1, 'Password is required'),
+});
+
 export default function LoginPage() {
     const { login } = useAuth();
-    const [form, setForm] = useState({ email: '', password: '' });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    function handleChange(e) {
-        setForm({ ...form, [e.target.name]: e.target.value });
-    }
+    const form = useForm({
+        resolver: zodResolver(loginSchema),
+        defaultValues: {
+            email: '',
+            password: '',
+        },
+    });
 
-    async function handleSubmit(e) {
-        e.preventDefault();
+    async function onSubmit(values) {
         setError('');
         setLoading(true);
         try {
-            await login(form.email, form.password);
+            await login(values.email, values.password);
         } catch (err) {
             setError(err.response?.data?.error || 'Login failed');
         } finally {
@@ -58,45 +76,57 @@ export default function LoginPage() {
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-                        <div className="space-y-2">
-                            <Label htmlFor="email" className="text-zinc-300">Email Address</Label>
-                            <Input
-                                id="email"
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5">
+                            <FormField
+                                control={form.control}
                                 name="email"
-                                type="email"
-                                placeholder="your@email.com"
-                                className="bg-zinc-900/50 border-white/10 focus-visible:ring-purple-500 text-white placeholder:text-zinc-500"
-                                value={form.email}
-                                onChange={handleChange}
-                                required
+                                render={({ field }) => (
+                                    <FormItem className="space-y-2">
+                                        <FormLabel className="text-zinc-300">Email Address</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="email"
+                                                placeholder="your@email.com"
+                                                className="bg-zinc-900/50 border-white/10 focus-visible:ring-purple-500 text-white placeholder:text-zinc-500"
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                        <FormMessage className="text-red-400 text-xs" />
+                                    </FormItem>
+                                )}
                             />
-                        </div>
 
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="password" className="text-zinc-300">Password</Label>
-                            </div>
-                            <Input
-                                id="password"
+                            <FormField
+                                control={form.control}
                                 name="password"
-                                type="password"
-                                placeholder="••••••••"
-                                className="bg-zinc-900/50 border-white/10 focus-visible:ring-purple-500 text-white placeholder:text-zinc-500"
-                                value={form.password}
-                                onChange={handleChange}
-                                required
+                                render={({ field }) => (
+                                    <FormItem className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <FormLabel className="text-zinc-300">Password</FormLabel>
+                                        </div>
+                                        <FormControl>
+                                            <Input
+                                                type="password"
+                                                placeholder="••••••••"
+                                                className="bg-zinc-900/50 border-white/10 focus-visible:ring-purple-500 text-white placeholder:text-zinc-500"
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                        <FormMessage className="text-red-400 text-xs" />
+                                    </FormItem>
+                                )}
                             />
-                        </div>
 
-                        <Button
-                            type="submit"
-                            className="w-full py-6 mt-4 text-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white border-0 shadow-lg shadow-purple-500/25"
-                            disabled={loading}
-                        >
-                            {loading ? <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span> : 'Sign In'}
-                        </Button>
-                    </form>
+                            <Button
+                                type="submit"
+                                className="w-full py-6 mt-4 text-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white border-0 shadow-lg shadow-purple-500/25"
+                                disabled={loading}
+                            >
+                                {loading ? <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span> : 'Sign In'}
+                            </Button>
+                        </form>
+                    </Form>
                 </CardContent>
 
                 <CardFooter className="flex justify-center border-t border-white/5 pt-6 mt-2">

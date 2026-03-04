@@ -1,7 +1,19 @@
 'use client';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useAuth } from '../../../context/AuthContext';
-import api from '../../../lib/api';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+} from '@/components/ui/form';
+import { useUpdateProfileMutation } from '../../../store/slice/userApi';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +22,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
     Select,
     SelectContent,
@@ -20,35 +31,38 @@ import {
 } from '@/components/ui/select';
 import { Pencil, X, Save, CheckCircle, MapPin, Eye, Heart } from 'lucide-react';
 
+const profileSchema = z.object({
+    bio: z.string().max(300, 'Bio must be under 300 characters').optional().or(z.literal('')),
+    city: z.string().max(100).optional().or(z.literal('')),
+    visibility: z.enum(['PUBLIC', 'HIDDEN']),
+    interestedIn: z.enum(['MALE', 'FEMALE', 'OTHER', 'ANY']),
+});
+
 export default function ProfilePage() {
-    const { user, checkAuth } = useAuth();
+    const { user } = useAuth();
     const [editing, setEditing] = useState(false);
-    const [form, setForm] = useState({
-        bio: user?.profile?.bio || '',
-        city: user?.profile?.city || '',
-        visibility: user?.profile?.visibility || 'PUBLIC',
-        interestedIn: user?.profile?.interestedIn || 'ANY',
-    });
-    const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState('');
 
-    function handleChange(e) {
-        setForm({ ...form, [e.target.name]: e.target.value });
-    }
+    const form = useForm({
+        resolver: zodResolver(profileSchema),
+        values: {
+            bio: user?.profile?.bio || '',
+            city: user?.profile?.city || '',
+            visibility: user?.profile?.visibility || 'PUBLIC',
+            interestedIn: user?.profile?.interestedIn || 'ANY',
+        },
+    });
 
-    async function handleSave(e) {
-        e.preventDefault();
-        setLoading(true);
+    const [updateProfile, { isLoading: loading }] = useUpdateProfileMutation();
+
+    async function onSubmit(values) {
         setSuccess('');
         try {
-            await api.patch('/me/profile', form);
-            await checkAuth();
-            setSuccess('Profile updated successfully');
+            await updateProfile(values).unwrap();
+            toast.success('Profile updated successfully');
             setEditing(false);
         } catch {
-            alert('Failed to update profile');
-        } finally {
-            setLoading(false);
+            toast.error('Failed to update profile');
         }
     }
 
@@ -152,71 +166,106 @@ export default function ProfilePage() {
                         <h3 className="text-xl font-bold text-zinc-100">Edit Profile Info</h3>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSave} className="space-y-5">
-                            <div className="space-y-2">
-                                <Label className="text-zinc-300">Bio</Label>
-                                <Textarea
+                        <Form {...form}>
+                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                                <FormField
+                                    control={form.control}
                                     name="bio"
-                                    rows={3}
-                                    maxLength={300}
-                                    placeholder="Tell people about yourself..."
-                                    className="bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50 min-h-[100px] resize-none"
-                                    value={form.bio}
-                                    onChange={handleChange}
+                                    render={({ field }) => (
+                                        <FormItem className="space-y-2">
+                                            <FormLabel className="text-zinc-300">Bio</FormLabel>
+                                            <FormControl>
+                                                <Textarea
+                                                    rows={3}
+                                                    maxLength={300}
+                                                    placeholder="Tell people about yourself..."
+                                                    className="bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50 min-h-[100px] resize-none"
+                                                    {...field}
+                                                />
+                                            </FormControl>
+                                            <p className="text-xs text-right text-zinc-500">{(field.value || '').length}/300</p>
+                                            <FormMessage className="text-red-400 text-xs" />
+                                        </FormItem>
+                                    )}
                                 />
-                                <p className="text-xs text-right text-zinc-500">{form.bio.length}/300</p>
-                            </div>
 
-                            <div className="space-y-2">
-                                <Label className="text-zinc-300">City</Label>
-                                <Input
+                                <FormField
+                                    control={form.control}
                                     name="city"
-                                    value={form.city}
-                                    onChange={handleChange}
-                                    className="bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50"
+                                    render={({ field }) => (
+                                        <FormItem className="space-y-2">
+                                            <FormLabel className="text-zinc-300">City</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    placeholder="New York"
+                                                    className="bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50"
+                                                    {...field}
+                                                />
+                                            </FormControl>
+                                            <FormMessage className="text-red-400 text-xs" />
+                                        </FormItem>
+                                    )}
                                 />
-                            </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label className="text-zinc-300">Visibility</Label>
-                                    <Select value={form.visibility} onValueChange={(val) => setForm({ ...form, visibility: val })}>
-                                        <SelectTrigger className="bg-zinc-900/50 border-white/[0.06] text-white focus:ring-purple-500/50">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                            <SelectItem value="PUBLIC" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Public</SelectItem>
-                                            <SelectItem value="HIDDEN" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Hidden</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="visibility"
+                                        render={({ field }) => (
+                                            <FormItem className="space-y-2">
+                                                <FormLabel className="text-zinc-300">Visibility</FormLabel>
+                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                    <FormControl>
+                                                        <SelectTrigger className="bg-zinc-900/50 border-white/[0.06] text-white focus:ring-purple-500/50">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                        <SelectItem value="PUBLIC" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Public</SelectItem>
+                                                        <SelectItem value="HIDDEN" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Hidden</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage className="text-red-400 text-xs" />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="interestedIn"
+                                        render={({ field }) => (
+                                            <FormItem className="space-y-2">
+                                                <FormLabel className="text-zinc-300">Interested In</FormLabel>
+                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                    <FormControl>
+                                                        <SelectTrigger className="bg-zinc-900/50 border-white/[0.06] text-white focus:ring-purple-500/50">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent className="bg-zinc-900 border-white/10 text-white">
+                                                        <SelectItem value="MALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Male</SelectItem>
+                                                        <SelectItem value="FEMALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Female</SelectItem>
+                                                        <SelectItem value="ANY" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Any</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage className="text-red-400 text-xs" />
+                                            </FormItem>
+                                        )}
+                                    />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label className="text-zinc-300">Interested In</Label>
-                                    <Select value={form.interestedIn} onValueChange={(val) => setForm({ ...form, interestedIn: val })}>
-                                        <SelectTrigger className="bg-zinc-900/50 border-white/[0.06] text-white focus:ring-purple-500/50">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                                            <SelectItem value="MALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Male</SelectItem>
-                                            <SelectItem value="FEMALE" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Female</SelectItem>
-                                            <SelectItem value="ANY" className="focus:bg-purple-500/20 focus:text-white cursor-pointer">Any</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
 
-                            <Button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full py-5 mt-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white border-0 shadow-lg shadow-purple-500/20"
-                            >
-                                {loading ? (
-                                    <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                ) : (
-                                    <><Save className="w-4 h-4 mr-2" />Save Changes</>
-                                )}
-                            </Button>
-                        </form>
+                                <Button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full py-5 mt-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white border-0 shadow-lg shadow-purple-500/20"
+                                >
+                                    {loading ? (
+                                        <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        <><Save className="w-4 h-4 mr-2" />Save Changes</>
+                                    )}
+                                </Button>
+                            </form>
+                        </Form>
                     </CardContent>
                 </Card>
             )}

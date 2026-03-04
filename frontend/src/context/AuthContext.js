@@ -1,41 +1,34 @@
 'use client';
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext } from 'react';
 import { useRouter } from 'next/navigation';
-import api from '../lib/api';
+import {
+    useGetMeQuery,
+    useLoginMutation,
+    useRegisterMutation,
+    useLogoutMutation,
+    useAcceptConsentMutation,
+} from '../store/slice/authApi';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
     const router = useRouter();
 
-    useEffect(() => {
-        checkAuth();
-    }, []);
+    // RTK Query handles fetching + caching the current user
+    const { data: user = null, isLoading: loading, refetch: checkAuth } = useGetMeQuery(undefined, {
+        // Skip the query if there's no token (avoids a 401 on first load)
+        skip: typeof window !== 'undefined' && !localStorage.getItem('accessToken'),
+    });
 
-    async function checkAuth() {
-        try {
-            const token = localStorage.getItem('accessToken');
-            if (!token) {
-                setLoading(false);
-                return;
-            }
-            const { data } = await api.get('/me');
-            setUser(data);
-        } catch {
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-        } finally {
-            setLoading(false);
-        }
-    }
+    const [loginMutation] = useLoginMutation();
+    const [registerMutation] = useRegisterMutation();
+    const [logoutMutation] = useLogoutMutation();
+    const [acceptConsentMutation] = useAcceptConsentMutation();
 
     async function login(email, password) {
-        const { data } = await api.post('/auth/login', { email, password });
+        const { data } = await loginMutation({ email, password }).unwrap().then((data) => ({ data }));
         localStorage.setItem('accessToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
-        setUser(data.user);
         // Check consent
         if (!data.user.consentAcceptedAt) {
             router.push('/consent');
@@ -46,29 +39,26 @@ export function AuthProvider({ children }) {
     }
 
     async function register(formData) {
-        const { data } = await api.post('/auth/register', formData);
+        const data = await registerMutation(formData).unwrap();
         localStorage.setItem('accessToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
-        setUser(data.user);
         router.push('/consent');
         return data;
     }
 
     async function logout() {
         try {
-            await api.post('/auth/logout');
+            await logoutMutation().unwrap();
         } catch {
             // Ignore
         }
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        setUser(null);
         router.push('/auth/login');
     }
 
     async function acceptConsent() {
-        await api.post('/auth/consent/accept');
-        setUser((prev) => ({ ...prev, consentAcceptedAt: new Date().toISOString() }));
+        await acceptConsentMutation().unwrap();
         router.push('/app/discover');
     }
 

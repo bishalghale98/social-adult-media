@@ -1,8 +1,14 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
-import api from '../../lib/api';
+import {
+    useGetReportsQuery,
+    useReviewReportMutation,
+    useSuspendUserMutation,
+    useBanUserMutation,
+} from '../../store/slice/adminApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,58 +20,49 @@ import { ShieldAlert, CheckCircle, Ban, Clock } from 'lucide-react';
 export default function AdminPage() {
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
-    const [reports, setReports] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('OPEN');
 
     useEffect(() => {
         if (!authLoading && (!user || user.role !== 'ADMIN')) {
             router.push('/app/discover');
-            return;
         }
-        if (user?.role === 'ADMIN') {
-            fetchReports();
-        }
-    }, [user, authLoading, filter]);
+    }, [user, authLoading]);
 
-    async function fetchReports() {
-        setLoading(true);
+    const { data: reportsData, isLoading: loading } = useGetReportsQuery(
+        { status: filter },
+        { skip: !user || user.role !== 'ADMIN' }
+    );
+    const reports = reportsData?.reports || [];
+
+    const [reviewReport] = useReviewReportMutation();
+    const [suspendUser] = useSuspendUserMutation();
+    const [banUser] = useBanUserMutation();
+
+    async function handleReview(id) {
         try {
-            const { data } = await api.get('/admin/reports', { params: { status: filter } });
-            setReports(data.reports);
+            await reviewReport(id).unwrap();
         } catch {
-            // Ignore
-        } finally {
-            setLoading(false);
+            toast.error('Failed to review report');
         }
     }
 
-    async function reviewReport(id) {
-        try {
-            await api.post(`/admin/reports/${id}/review`);
-            fetchReports();
-        } catch {
-            alert('Failed to review report');
-        }
-    }
-
-    async function suspendUser(userId) {
+    async function handleSuspend(userId) {
         if (!confirm('Suspend this user?')) return;
         try {
-            await api.post(`/admin/users/${userId}/suspend`);
-            alert('User suspended');
+            await suspendUser(userId).unwrap();
+            toast.success('User suspended');
         } catch {
-            alert('Failed');
+            toast.error('Failed to suspend user');
         }
     }
 
-    async function banUser(userId) {
+    async function handleBan(userId) {
         if (!confirm('Ban this user? This is permanent.')) return;
         try {
-            await api.post(`/admin/users/${userId}/ban`);
-            alert('User banned');
+            await banUser(userId).unwrap();
+            toast.success('User banned');
         } catch {
-            alert('Failed');
+            toast.error('Failed to ban user');
         }
     }
 
@@ -74,7 +71,6 @@ export default function AdminPage() {
     return (
         <div className="min-h-screen bg-black p-6 md:p-8">
             <div className="max-w-5xl mx-auto space-y-8 animate-in">
-                {/* Header */}
                 <div>
                     <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">
                         <span className="bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">Admin Dashboard</span>
@@ -82,7 +78,6 @@ export default function AdminPage() {
                     <p className="text-zinc-400 text-lg">Moderation & Report Management</p>
                 </div>
 
-                {/* Report Tabs */}
                 <Tabs value={filter} onValueChange={setFilter} className="w-full">
                     <TabsList className="bg-zinc-900 border border-white/[0.06] p-1 h-auto">
                         {['OPEN', 'REVIEWED', 'CLOSED'].map((s) => (
@@ -136,77 +131,33 @@ export default function AdminPage() {
                                             <CardContent className="p-6">
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={report.targetType === 'USER'
-                                                                ? 'border-purple-500/30 bg-purple-500/10 text-purple-300'
-                                                                : 'border-pink-500/30 bg-pink-500/10 text-pink-300'
-                                                            }
-                                                        >
+                                                        <Badge variant="outline" className={report.targetType === 'USER' ? 'border-purple-500/30 bg-purple-500/10 text-purple-300' : 'border-pink-500/30 bg-pink-500/10 text-pink-300'}>
                                                             {report.targetType}
                                                         </Badge>
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={report.status === 'OPEN'
-                                                                ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-                                                                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                                                            }
-                                                        >
+                                                        <Badge variant="outline" className={report.status === 'OPEN' ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'}>
                                                             {report.status}
                                                         </Badge>
                                                     </div>
-                                                    <span className="text-xs text-zinc-500 font-medium">
-                                                        {new Date(report.createdAt).toLocaleDateString()}
-                                                    </span>
+                                                    <span className="text-xs text-zinc-500 font-medium">{new Date(report.createdAt).toLocaleDateString()}</span>
                                                 </div>
-
                                                 <div className="space-y-1.5 mb-4">
-                                                    <p className="text-sm text-zinc-300">
-                                                        <span className="font-semibold text-zinc-100">Reporter:</span>{' '}
-                                                        {report.reporter?.profile?.username || 'Unknown'}
-                                                    </p>
-                                                    <p className="text-sm text-zinc-300">
-                                                        <span className="font-semibold text-zinc-100">Target ID:</span>{' '}
-                                                        <code className="text-xs bg-zinc-800 px-2 py-0.5 rounded font-mono text-zinc-400">
-                                                            {report.targetId}
-                                                        </code>
-                                                    </p>
+                                                    <p className="text-sm text-zinc-300"><span className="font-semibold text-zinc-100">Reporter:</span> {report.reporter?.profile?.username || 'Unknown'}</p>
+                                                    <p className="text-sm text-zinc-300"><span className="font-semibold text-zinc-100">Target ID:</span> <code className="text-xs bg-zinc-800 px-2 py-0.5 rounded font-mono text-zinc-400">{report.targetId}</code></p>
                                                 </div>
-
                                                 <Separator className="bg-white/[0.04] my-4" />
-
-                                                <p className="text-sm text-zinc-400 mb-5">
-                                                    <span className="font-semibold text-zinc-200">Reason:</span> {report.reason}
-                                                </p>
-
+                                                <p className="text-sm text-zinc-400 mb-5"><span className="font-semibold text-zinc-200">Reason:</span> {report.reason}</p>
                                                 {report.status === 'OPEN' && (
                                                     <div className="flex flex-wrap gap-2">
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => reviewReport(report.id)}
-                                                            className="bg-purple-600 hover:bg-purple-500 text-white shadow-sm"
-                                                        >
-                                                            <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
-                                                            Mark Reviewed
+                                                        <Button size="sm" onClick={() => handleReview(report.id)} className="bg-purple-600 hover:bg-purple-500 text-white shadow-sm">
+                                                            <CheckCircle className="w-3.5 h-3.5 mr-1.5" />Mark Reviewed
                                                         </Button>
                                                         {report.targetType === 'USER' && (
                                                             <>
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => suspendUser(report.targetId)}
-                                                                    className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
-                                                                >
+                                                                <Button variant="outline" size="sm" onClick={() => handleSuspend(report.targetId)} className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300">
                                                                     Suspend User
                                                                 </Button>
-                                                                <Button
-                                                                    variant="destructive"
-                                                                    size="sm"
-                                                                    onClick={() => banUser(report.targetId)}
-                                                                    className="shadow-sm"
-                                                                >
-                                                                    <Ban className="w-3.5 h-3.5 mr-1.5" />
-                                                                    Ban User
+                                                                <Button variant="destructive" size="sm" onClick={() => handleBan(report.targetId)} className="shadow-sm">
+                                                                    <Ban className="w-3.5 h-3.5 mr-1.5" />Ban User
                                                                 </Button>
                                                             </>
                                                         )}

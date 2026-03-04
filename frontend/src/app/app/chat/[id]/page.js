@@ -1,8 +1,18 @@
 'use client';
-import { useState, useEffect, useRef, use } from 'react';
+import { useState, useEffect, useRef, use, useMemo, useCallback } from 'react';
 import { useAuth } from '../../../../context/AuthContext';
 import { getSocket, disconnectSocket } from '../../../../lib/socket';
-import api from '../../../../lib/api';
+import { useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+} from '@/components/ui/form';
+import { useGetMessagesQuery } from '../../../../store/slice/conversationApi';
+import { useGetConversationsQuery } from '../../../../store/slice/conversationApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -11,72 +21,75 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Send, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
+const messageSchema = z.object({
+    message: z.string().min(1, 'Message cannot be empty'),
+});
+
 export default function ChatPage({ params }) {
     const resolvedParams = use(params);
     const conversationId = resolvedParams.id;
     const { user } = useAuth();
-    const [messages, setMessages] = useState([]);
-    const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [otherUser, setOtherUser] = useState(null);
+
+    const { data: msgData, isLoading: loadingMessages } = useGetMessagesQuery(conversationId);
+    const { data: conversationsData } = useGetConversationsQuery();
+
+    // Track only messages that arrive via socket (after initial fetch)
+    const [socketMessages, setSocketMessages] = useState([]);
     const [isTyping, setIsTyping] = useState(false);
+
+    const form = useForm({
+        resolver: zodResolver(messageSchema),
+        defaultValues: {
+            message: '',
+        }
+    });
+
+    const watchMessage = useWatch({ control: form.control, name: 'message' });
+
     const messagesEndRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const socketRef = useRef(null);
 
-    useEffect(() => {
-        fetchMessages();
-        setupSocket();
-        return () => {
-            disconnectSocket();
-        };
+    // Derive final messages list from RTK Query data + socket messages
+    const messages = useMemo(() => {
+        const fetched = msgData?.messages || [];
+        const fetchedIds = new Set(fetched.map((m) => m.id));
+        const uniqueSocketMsgs = socketMessages.filter((m) => !fetchedIds.has(m.id));
+        return [...fetched, ...uniqueSocketMsgs];
+    }, [msgData, socketMessages]);
+
+    const otherUser = conversationsData?.find((c) => c.id === conversationId)?.otherUser || null;
+    const loading = loadingMessages;
+
+    const handleNewMessage = useCallback((message) => {
+        if (message.conversationId === conversationId) {
+            setSocketMessages((prev) => [...prev, message]);
+        }
     }, [conversationId]);
 
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
-    function scrollToBottom() {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-
-    async function fetchMessages() {
-        try {
-            const [msgRes, convRes] = await Promise.all([
-                api.get(`/conversations/${conversationId}/messages`),
-                api.get('/conversations'),
-            ]);
-            setMessages(msgRes.data.messages);
-            const conv = convRes.data.find((c) => c.id === conversationId);
-            if (conv) setOtherUser(conv.otherUser);
-        } catch {
-            // Ignore
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    function setupSocket() {
+    const setupSocket = useCallback(() => {
         const socket = getSocket();
         socketRef.current = socket;
-
-        socket.on('message:new', (message) => {
-            if (message.conversationId === conversationId) {
-                setMessages((prev) => [...prev, message]);
-            }
-        });
-
+        socket.on('message:new', handleNewMessage);
         socket.on('typing', (data) => {
             if (data.conversationId === conversationId && data.userId !== user?.id) {
                 setIsTyping(data.isTyping);
             }
         });
-    }
+    }, [conversationId, handleNewMessage, user?.id]);
+
+    useEffect(() => {
+        setupSocket();
+        return () => { disconnectSocket(); };
+    }, [conversationId, setupSocket]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
 
     function handleTyping() {
-        const socket = socketRef.current;
+        const socket = getSocket();
         if (!socket) return;
-
         socket.emit('typing:start', { conversationId });
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = setTimeout(() => {
@@ -84,19 +97,14 @@ export default function ChatPage({ params }) {
         }, 2000);
     }
 
-    async function sendMessage(e) {
-        e.preventDefault();
-        if (!input.trim()) return;
-
-        const socket = socketRef.current;
+    async function onSubmit(values) {
+        if (!values.message.trim()) return;
+        const socket = getSocket();
         if (socket) {
-            socket.emit('message:send', {
-                conversationId,
-                bodyText: input.trim(),
-            });
+            socket.emit('message:send', { conversationId, bodyText: values.message.trim() });
             socket.emit('typing:stop', { conversationId });
         }
-        setInput('');
+        form.reset();
     }
 
     function formatTime(dateStr) {
@@ -128,7 +136,6 @@ export default function ChatPage({ params }) {
 
     return (
         <div className="flex flex-col h-[calc(100vh-100px)] lg:h-[calc(100vh-40px)] animate-in max-w-5xl mx-auto w-full">
-            {/* Chat header */}
             <Card className="bg-zinc-950/80 border-white/[0.06] mb-3 shrink-0 shadow-sm">
                 <CardContent className="p-4 flex items-center gap-3">
                     <Link href="/app/chats" className="md:hidden">
@@ -143,16 +150,11 @@ export default function ChatPage({ params }) {
                     </Avatar>
                     <div>
                         <h2 className="font-bold text-[0.95rem] text-zinc-100 leading-tight">{otherUser?.username || 'Chat'}</h2>
-                        {isTyping && (
-                            <p className="text-xs text-purple-400 italic animate-pulse">
-                                typing...
-                            </p>
-                        )}
+                        {isTyping && <p className="text-xs text-purple-400 italic animate-pulse">typing...</p>}
                     </div>
                 </CardContent>
             </Card>
 
-            {/* Messages */}
             <Card className="flex-1 overflow-hidden border-white/[0.06] bg-zinc-950/60 mb-3">
                 <CardContent className="p-4 h-full overflow-y-auto flex flex-col gap-2.5">
                     {messages.length === 0 ? (
@@ -171,9 +173,7 @@ export default function ChatPage({ params }) {
                                         }`}>
                                         {msg.bodyText}
                                     </div>
-                                    <p className="text-[0.65rem] text-zinc-600 mt-1 px-1">
-                                        {formatTime(msg.createdAt)}
-                                    </p>
+                                    <p className="text-[0.65rem] text-zinc-600 mt-1 px-1">{formatTime(msg.createdAt)}</p>
                                 </div>
                             );
                         })
@@ -182,25 +182,39 @@ export default function ChatPage({ params }) {
                 </CardContent>
             </Card>
 
-            {/* Input */}
             <Card className="bg-zinc-950/80 border-white/[0.06] shrink-0 shadow-md">
                 <CardContent className="p-3">
-                    <form onSubmit={sendMessage} className="flex gap-2 items-center">
-                        <Input
-                            className="flex-1 bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50"
-                            placeholder="Type a message..."
-                            value={input}
-                            onChange={(e) => { setInput(e.target.value); handleTyping(); }}
-                        />
-                        <Button
-                            type="submit"
-                            size="icon"
-                            disabled={!input.trim()}
-                            className="bg-purple-600 hover:bg-purple-500 text-white h-10 w-10 shrink-0 shadow-sm shadow-purple-500/20 disabled:opacity-30"
-                        >
-                            <Send className="w-4 h-4" />
-                        </Button>
-                    </form>
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="flex gap-2 items-center">
+                            <FormField
+                                control={form.control}
+                                name="message"
+                                render={({ field }) => (
+                                    <FormItem className="flex-1 m-0 space-y-0">
+                                        <FormControl>
+                                            <Input
+                                                className="bg-zinc-900/50 border-white/[0.06] text-white placeholder:text-zinc-500 focus-visible:ring-purple-500/50"
+                                                placeholder="Type a message..."
+                                                {...field}
+                                                onChange={(e) => {
+                                                    field.onChange(e);
+                                                    handleTyping();
+                                                }}
+                                            />
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
+                            <Button
+                                type="submit"
+                                size="icon"
+                                disabled={!watchMessage?.trim() || form.formState.isSubmitting}
+                                className="bg-purple-600 hover:bg-purple-500 text-white h-10 w-10 shrink-0 shadow-sm shadow-purple-500/20 disabled:opacity-30"
+                            >
+                                <Send className="w-4 h-4" />
+                            </Button>
+                        </form>
+                    </Form>
                 </CardContent>
             </Card>
         </div>

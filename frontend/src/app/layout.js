@@ -1,7 +1,9 @@
 import "./globals.css";
 import { Inter } from "next/font/google";
+import StoreProvider from "../store/StoreProvider";
 import { AuthProvider } from "../context/AuthContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "sonner";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -26,11 +28,14 @@ export default function RootLayout({ children }) {
           padding: 0,
         }}
       >
-        <AuthProvider>
-          <TooltipProvider delayDuration={300}>
-            {children}
-          </TooltipProvider>
-        </AuthProvider>
+        <StoreProvider>
+          <AuthProvider>
+            <TooltipProvider delayDuration={300}>
+              {children}
+              <Toaster theme="dark" position="top-right" richColors closeButton />
+            </TooltipProvider>
+          </AuthProvider>
+        </StoreProvider>
       </body>
     </html>
   );

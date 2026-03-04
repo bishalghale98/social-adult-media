@@ -1,7 +1,14 @@
 'use client';
-import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import api from '../../../lib/api';
+import { toast } from 'sonner';
+import {
+    useGetIncomingRequestsQuery,
+    useGetOutgoingRequestsQuery,
+    useAcceptRequestMutation,
+    useRejectRequestMutation,
+    useCancelRequestMutation,
+} from '../../../store/slice/friendApi';
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -11,59 +18,41 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Inbox, Send, UserCheck, UserX, X } from 'lucide-react';
 
 export default function RequestsPage() {
-    const [incoming, setIncoming] = useState([]);
-    const [outgoing, setOutgoing] = useState([]);
     const [tab, setTab] = useState('incoming');
-    const [loading, setLoading] = useState(true);
     const router = useRouter();
 
-    useEffect(() => {
-        fetchRequests();
-    }, []);
+    const { data: incoming = [], isLoading: loadingIncoming } = useGetIncomingRequestsQuery();
+    const { data: outgoing = [], isLoading: loadingOutgoing } = useGetOutgoingRequestsQuery();
+    const loading = loadingIncoming || loadingOutgoing;
 
-    async function fetchRequests() {
-        setLoading(true);
-        try {
-            const [inc, out] = await Promise.all([
-                api.get('/friends/requests/incoming'),
-                api.get('/friends/requests/outgoing'),
-            ]);
-            setIncoming(inc.data);
-            setOutgoing(out.data);
-        } catch {
-            // Ignore
-        } finally {
-            setLoading(false);
-        }
-    }
+    const [acceptRequest] = useAcceptRequestMutation();
+    const [rejectRequest] = useRejectRequestMutation();
+    const [cancelRequest] = useCancelRequestMutation();
 
-    async function acceptRequest(id) {
+    async function handleAccept(id) {
         try {
-            const { data } = await api.post(`/friends/requests/${id}/accept`);
-            setIncoming((prev) => prev.filter((r) => r.id !== id));
+            const data = await acceptRequest(id).unwrap();
             if (data.conversation?.id) {
                 router.push(`/app/chat/${data.conversation.id}`);
             }
         } catch (err) {
-            alert(err.response?.data?.error || 'Failed');
+            toast.error(err.data?.error || 'Failed to accept request');
         }
     }
 
-    async function rejectRequest(id) {
+    async function handleReject(id) {
         try {
-            await api.post(`/friends/requests/${id}/reject`);
-            setIncoming((prev) => prev.filter((r) => r.id !== id));
+            await rejectRequest(id).unwrap();
         } catch (err) {
-            alert(err.response?.data?.error || 'Failed');
+            toast.error(err.data?.error || 'Failed to reject request');
         }
     }
 
-    async function cancelRequest(id) {
+    async function handleCancel(id) {
         try {
-            await api.post(`/friends/requests/${id}/cancel`);
-            setOutgoing((prev) => prev.filter((r) => r.id !== id));
+            await cancelRequest(id).unwrap();
         } catch (err) {
-            alert(err.response?.data?.error || 'Failed');
+            toast.error(err.data?.error || 'Failed to cancel request');
         }
     }
 
@@ -149,7 +138,7 @@ export default function RequestsPage() {
                                             <div className="flex gap-2">
                                                 <Button
                                                     size="sm"
-                                                    onClick={() => acceptRequest(req.id)}
+                                                    onClick={() => handleAccept(req.id)}
                                                     className="bg-purple-600 hover:bg-purple-500 text-white h-7 text-xs shadow-sm"
                                                 >
                                                     <UserCheck className="w-3 h-3 mr-1" />
@@ -158,7 +147,7 @@ export default function RequestsPage() {
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => rejectRequest(req.id)}
+                                                    onClick={() => handleReject(req.id)}
                                                     className="border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 h-7 text-xs"
                                                 >
                                                     <UserX className="w-3 h-3 mr-1" />
@@ -215,7 +204,7 @@ export default function RequestsPage() {
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => cancelRequest(req.id)}
+                                                    onClick={() => handleCancel(req.id)}
                                                     className="border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 h-7 text-xs"
                                                 >
                                                     <X className="w-3 h-3 mr-1" />
